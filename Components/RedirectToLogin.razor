@@ -1,0 +1,14 @@
+@inject NavigationManager Navigation
+
+<div></div>
+
+@code {
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var returnUrl = new Uri(Navigation.Uri).PathAndQuery;
+            Navigation.NavigateTo($"/Account/Login?returnUrl={Uri.EscapeDataString(returnUrl)}", true);
+        }
+    }
+}

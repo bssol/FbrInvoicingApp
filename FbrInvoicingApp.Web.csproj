@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>aspnet-FbrInvoicingApp_Web-36bba9e1-e75a-43c1-b83c-995eda597c69</UserSecretsId>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <RazorComponent Remove="Components\Account\**" />
+    <RazorComponent Remove="Components\RedirectToLogin.razor" />
+    <Compile Remove="Components\Account\**" />
+    <Content Remove="Components\Account\**" />
+    <None Remove="Components\Account\**" />
+    <Compile Remove="Data\Migrations\**" />
+    <RazorComponent Include="Components\Account\Shared\RedirectToLogin.razor" />
+  </ItemGroup>
+
+</Project>

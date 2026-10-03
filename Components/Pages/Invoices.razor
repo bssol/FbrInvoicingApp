@@ -1,0 +1,45 @@
+@page "/invoices"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using FbrInvoicingApp.Web.Domain
+@using FbrInvoicingApp.Web.Services
+@inject InvoiceService InvoiceService
+@inject NavigationManager Navigation
+
+<PageTitle>Invoices</PageTitle>
+
+<div class="page-heading d-flex justify-content-between align-items-center mb-4">
+    <div><span class="eyebrow">FBR WORKSPACE</span><h1>Invoices</h1><p class="text-muted mb-0">Prepare, validate and submit invoices with a clear audit trail.</p></div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-primary" href="/invoices/send">Send to FBR</a>
+        <a class="btn btn-light" href="/invoices/import">Import CSV</a>
+        <a class="btn btn-primary" href="/invoices/new">+ New invoice</a>
+    </div>
+</div>
+
+<div class="card p-3 mb-4 action-bar"><label for="invoice-search">Find an invoice</label><input id="invoice-search" class="form-control" style="max-width:360px" placeholder="Reference or buyer name" @bind="search" @bind:event="oninput" /><select class="form-select" style="max-width:200px" aria-label="Filter by stage" @bind="stage"><option value="">All stages</option><option>Draft</option><option>Validated</option><option>SentToFbr</option></select></div>
+@if (error is not null) { <div class="alert alert-danger">@error <a href="/api/auth/logout">Sign in again</a></div> }
+else if (invoices is null)
+{
+    <div class="card p-4">Loading invoices…</div>
+}
+else if (invoices.Count == 0)
+{
+    <div class="empty-state card p-5 text-center"><h3>No invoices yet</h3><p class="text-muted">Create your first draft or import a CSV file.</p><a class="btn btn-primary" href="/invoices/new">Create invoice</a></div>
+}
+else
+{
+    <div class="card table-card"><div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Reference</th><th>Buyer</th><th>Date</th><th>Stage</th><th>Result</th><th>FBR invoice</th><th></th></tr></thead><tbody>
+    @foreach (var invoice in invoices.Where(x => (stage == "" || x.Stage.ToString() == stage) && (x.InvoiceRefNo.Contains(search, StringComparison.OrdinalIgnoreCase) || x.Payload.BuyerBusinessName.Contains(search, StringComparison.OrdinalIgnoreCase))))
+    {
+        <tr><td class="fw-semibold">@invoice.InvoiceRefNo</td><td>@invoice.Payload.BuyerBusinessName</td><td>@invoice.Payload.InvoiceDate</td><td><span class="badge stage-@invoice.Stage.ToString().ToLowerInvariant()">@invoice.Stage</span></td><td><span class="badge state-@invoice.State.ToString().ToLowerInvariant()">@invoice.State</span></td><td>@(invoice.ReceivedInvoiceNumber ?? "—")</td><td class="text-end"><a class="btn btn-sm btn-light" href="/invoices/@invoice.Id">View</a></td></tr>
+    }
+    </tbody></table></div></div>
+}
+
+@code {
+    private IReadOnlyList<InvoiceRecord>? invoices;
+    private string search = "", stage = "";
+    private string? error;
+    protected override async Task OnInitializedAsync() { try { invoices = await InvoiceService.ListAsync(); } catch (Exception ex) { error = ex.Message; } }
+}

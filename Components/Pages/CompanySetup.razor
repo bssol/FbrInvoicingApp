@@ -1,0 +1,78 @@
+@page "/company"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using FbrInvoicingApp.Web.Domain
+@using FbrInvoicingApp.Web.Services
+@inject InvoiceService InvoiceService
+@inject NavigationManager Navigation
+
+<PageTitle>Company setup</PageTitle>
+<div class="page-heading mb-4"><span class="eyebrow">SETTINGS</span><h1>Company setup</h1><p class="text-muted">Keep company details and FBR credentials in one secure place.</p></div>
+<EditForm Model="company" OnValidSubmit="SaveAsync" class="card p-4 form-card"><DataAnnotationsValidator /><ValidationSummary /><div class="row g-3"><div class="col-md-6"><label>Company name</label><InputText class="form-control" @bind-Value="company.Name" /></div><div class="col-md-6"><label>NTN/CNIC</label><InputText class="form-control" @bind-Value="company.NtnCnic" /></div><div class="col-md-6"><label>Province</label><InputText class="form-control" @bind-Value="company.Province" /></div><div class="col-md-6"><label>Address</label><InputText class="form-control" @bind-Value="company.Address" /></div><div class="col-12"><hr /><div class="section-title">FBR API tokens</div><p class="text-muted small mb-2">Tokens are encrypted before they are stored. Existing tokens remain unchanged when these fields are left blank.</p></div><div class="col-md-4"><label>Validation token</label><InputText type="password" class="form-control" @bind-Value="validationToken" /></div><div class="col-md-4"><label>Sandbox token</label><InputText type="password" class="form-control" @bind-Value="sandboxToken" /></div><div class="col-md-4"><label>Production token</label><InputText type="password" class="form-control" @bind-Value="productionToken" /></div></div>@if (!string.IsNullOrWhiteSpace(saveError)) { <div class="alert alert-danger mt-3 mb-0">@saveError</div> }<div class="mt-4 d-flex justify-content-end gap-2"><a class="btn btn-light" href="/invoices">Cancel</a><button class="btn btn-primary" type="submit" disabled="@saving">@(saving ? "Saving…" : "Save company")</button></div></EditForm>
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <div class="card p-4 form-card mt-4">
+            <div class="section-title">Workspace access</div>
+            <p class="text-muted small">Grant an existing active user access to this company's invoices.</p>
+            <div class="input-group">
+                <InputText class="form-control" @bind-Value="accessEmail" placeholder="user@example.com" />
+                <button class="btn btn-light" type="button" @onclick="GrantAccessAsync">Grant access</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(accessMessage))
+            {
+                <div class="alert @(accessFailed ? "alert-danger" : "alert-success") mt-3 mb-0">@accessMessage</div>
+            }
+        </div>
+    </Authorized>
+</AuthorizeView>
+@code {
+    private Company company = new();
+    private string validationToken = "", sandboxToken = "", productionToken = "";
+    private string? saveError;
+    private bool saving;
+    private string accessEmail = "";
+    private string? accessMessage;
+    private bool accessFailed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { company = await InvoiceService.GetCurrentCompanyAsync() ?? new Company(); }
+        catch (Exception ex) { saveError = ex.Message; }
+    }
+
+    private async Task SaveAsync()
+    {
+        saveError = null;
+        saving = true;
+        try
+        {
+            await InvoiceService.SaveCompanyAsync(company, validationToken, sandboxToken, productionToken);
+            Navigation.NavigateTo("/invoices");
+        }
+        catch (Exception ex)
+        {
+            saveError = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task GrantAccessAsync()
+    {
+        accessMessage = null;
+        accessFailed = false;
+        try
+        {
+            await InvoiceService.GrantCurrentCompanyAccessAsync(accessEmail);
+            accessMessage = $"Access granted to {accessEmail.Trim()}.";
+        }
+        catch (Exception ex)
+        {
+            accessFailed = true;
+            accessMessage = ex.Message;
+        }
+    }
+}

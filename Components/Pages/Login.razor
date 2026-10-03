@@ -1,0 +1,22 @@
+@page "/Account/Login"
+@using System.ComponentModel.DataAnnotations
+@using FbrInvoicingApp.Web.Data
+@using FbrInvoicingApp.Web.Services
+@inject ApplicationDbContext Db
+@inject PasswordService Passwords
+@inject JwtService Jwt
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Sign in</PageTitle>
+<div class="auth-shell"><div class="auth-card"><p class="auth-kicker">WELCOME BACK</p><h1>Sign in to your workspace</h1><p class="auth-subtitle">Use your FBR Invoice Desk account to continue.</p>
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage)) { <div class="alert alert-danger">@ErrorMessage</div> }
+    <form method="post" action="/api/auth/login-form"><AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <div class="form-floating mb-3"><input class="form-control" name="Email" type="email" placeholder="name@example.com" required /><label>Email</label></div>
+        <div class="form-floating mb-3"><input class="form-control" name="Password" type="password" placeholder="Password" required /><label>Password</label></div>
+        <button class="btn btn-primary btn-lg w-100" type="submit">Sign in</button>
+        <div class="auth-links"><a href="/Account/ForgotPassword">Forgot your password?</a><a href="/Account/Register">Create an account</a></div>
+    </form>
+</div></div>
+@code { [SupplyParameterFromQuery] private string? ReturnUrl { get; set; } [SupplyParameterFromQuery(Name = "error")] private string? ErrorMessage { get; set; } }

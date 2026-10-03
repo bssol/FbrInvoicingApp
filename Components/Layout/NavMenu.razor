@@ -1,0 +1,83 @@
+﻿@implements IDisposable
+
+@inject NavigationManager NavigationManager
+
+<header class="app-header">
+    <div class="header-inner">
+        <a class="navbar-brand" href="/"><span class="brand-mark">F</span><span class="brand-copy"><strong>FBR</strong><small>Invoice desk</small></span></a>
+
+        <input id="nav-toggle" type="checkbox" title="Navigation menu" class="navbar-toggler" />
+        <label class="navbar-toggle-label" for="nav-toggle" aria-label="Open navigation menu"><span></span><span></span><span></span></label>
+
+        <nav class="nav top-nav">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                <span class="nav-symbol" aria-hidden="true">⌂</span><span class="nav-label">Home</span>
+            </NavLink>
+        </div>
+
+        <AuthorizeView>
+            <Authorized Context="authState">
+                <div class="nav-item px-3"><NavLink class="nav-link" href="invoices"><span class="nav-symbol" aria-hidden="true">▤</span><span class="nav-label">Invoices</span></NavLink></div>
+                <div class="nav-item px-3"><NavLink class="nav-link" href="invoices/send"><span class="nav-label">Send to FBR</span></NavLink></div>
+                <div class="nav-item px-3"><NavLink class="nav-link" href="invoices/import"><span class="nav-label">Import CSV</span></NavLink></div>
+                <div class="nav-item px-3"><NavLink class="nav-link" href="company"><span class="nav-label">Company</span></NavLink></div>
+                <details class="user-menu">
+                    <summary class="user-menu-trigger">
+                        <span class="user-avatar">@GetInitials(authState.User.Identity?.Name)</span>
+                        <span class="user-summary"><strong>@authState.User.Identity?.Name</strong><small>@(authState.User.IsInRole("Admin") ? "Administrator" : "Client")</small></span>
+                        <span class="user-chevron" aria-hidden="true">⌄</span>
+                    </summary>
+                    <div class="user-menu-panel">
+                        <a href="/company" class="user-menu-item"><span>⚙</span> Company setup</a>
+                        <a href="/api/auth/logout" class="user-menu-item user-menu-logout"><span>↪</span> Sign out</a>
+                    </div>
+                </details>
+            </Authorized>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Register">
+                        <span class="nav-symbol" aria-hidden="true">＋</span><span class="nav-label">Register</span>
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Login">
+                        <span class="nav-symbol" aria-hidden="true">→</span><span class="nav-label">Login</span>
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+        </nav>
+    </div>
+</header>
+
+@code {
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Split([' ', '@', '.', '_', '-'], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][..1].ToUpperInvariant()
+            : string.Concat(parts.Take(2).Select(x => x[0])).ToUpperInvariant();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}
+

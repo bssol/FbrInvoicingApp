@@ -1,0 +1,118 @@
+@page "/invoices/import"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@using FbrInvoicingApp.Web.Services
+@inject CsvInvoiceImportService ImportService
+@inject NavigationManager Navigation
+
+<PageTitle>Import invoices</PageTitle>
+
+<div class="page-heading d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <span class="eyebrow">FBR WORKSPACE</span>
+        <h1>Import invoices</h1>
+        <p class="text-muted mb-0">Upload a validated CSV export and save its invoices as drafts.</p>
+    </div>
+    <a class="btn btn-light" href="/invoices">Back to invoices</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card p-4 form-card">
+            <div class="section-title mb-2">CSV upload</div>
+            <p class="text-muted small">Each CSV row is checked before it is saved. Rows with the same invoice reference are combined into one invoice with multiple lines.</p>
+            <label class="form-label" for="invoice-csv">Invoice file</label>
+            <InputFile id="invoice-csv" OnChange="SelectFile" accept=".csv,text/csv" class="form-control" />
+
+            @if (selectedFile is not null)
+            {
+                <div class="upload-summary mt-3">
+                    <div class="fw-semibold">@selectedFile.Name</div>
+                    <div class="text-muted small">@FormatSize(selectedFile.Size)</div>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-danger mt-3 mb-0">@errorMessage</div>
+            }
+
+            @if (result is not null)
+            {
+                <div class="alert @(result.Succeeded ? "alert-success" : "alert-danger") mt-3 mb-0">
+                    @if (result.Succeeded)
+                    {
+                        <div class="fw-semibold">Import complete</div>
+                        <div>@result.InvoicesInserted invoice(s) saved as drafts. @result.ExistingSkipped duplicate(s) skipped.</div>
+                        @if (result.ExistingSkipped > 0)
+                        {
+                            <div class="small mt-2">Already existing references: @string.Join(", ", result.SkippedInvoiceReferences ?? [])</div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="fw-semibold">Import could not be completed</div>
+                        <ul class="mb-0 mt-2">@foreach (var error in result.Errors.Take(8)) { <li>@error</li> }</ul>
+                    }
+                </div>
+            }
+
+            <div class="mt-4 d-flex justify-content-end gap-2">
+                <a class="btn btn-light" href="/invoices">Cancel</a>
+                <button class="btn btn-primary" type="button" @onclick="ImportAsync" disabled="@(selectedFile is null || importing)">
+                    @(importing ? "Importing…" : "Import invoices")
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card p-4 h-100 import-help-card">
+            <div class="section-title mb-3">Before you import</div>
+            <ul class="text-muted small mb-0">
+                <li>Use the FBR CSV column names exactly as exported.</li>
+                <li>Dates must use <code>dd/MM/yyyy</code>.</li>
+                <li>Amounts must be non-negative and tax totals must reconcile.</li>
+                <li>Imported invoices stay in Draft / Pending until you validate and send them.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+@code {
+    private IBrowserFile? selectedFile;
+    private CsvImportResult? result;
+    private string? errorMessage;
+    private bool importing;
+
+    private void SelectFile(InputFileChangeEventArgs args)
+    {
+        selectedFile = args.File;
+        result = null;
+        errorMessage = null;
+    }
+
+    private async Task ImportAsync()
+    {
+        if (selectedFile is null) return;
+
+        importing = true;
+        result = null;
+        errorMessage = null;
+        try
+        {
+            await using var stream = selectedFile.OpenReadStream(10_000_000);
+            result = await ImportService.ImportAsync(stream, selectedFile.Name);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            importing = false;
+        }
+    }
+
+    private static string FormatSize(long bytes) => bytes < 1024 ? $"{bytes} bytes" : $"{bytes / 1024d:N1} KB";
+}

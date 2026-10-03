@@ -1,0 +1,70 @@
+@page "/invoices/send"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using FbrInvoicingApp.Web.Domain
+@using FbrInvoicingApp.Web.Services
+@inject InvoiceService Service
+<PageTitle>Send to FBR</PageTitle>
+<div class="page-heading"><span class="eyebrow">SUBMISSION WORKSPACE</span><h1>Send to FBR</h1><p>Select invoices, validate their data, then submit to the selected environment.</p></div>
+<div class="workflow-strip"><span>01 · Select invoices</span><span>02 · Validate with FBR</span><span>03 · Review &amp; send</span></div>
+@if (error is not null) { <div class="alert alert-danger" role="alert">@error</div> }
+<div class="card p-4 mb-4">
+    <div class="action-bar">
+        <label>Environment <select class="form-select" @bind="environment" disabled="@busy"><option value="@FbrEnvironment.Sandbox">Sandbox · testing</option><option value="@FbrEnvironment.Production">Production · live submission</option></select></label>
+        <span>@selected.Count selected</span>
+        <button class="btn btn-light" disabled="@(busy || selected.Count == 0)" @onclick="() => Process(false)">Validate selected</button>
+        <button class="btn btn-primary" disabled="@(busy || selected.Count == 0)" @onclick="() => confirming = true">Send selected</button>
+    </div>
+    <p class="text-muted small mt-3 mb-0">Only validated invoices can be sent. Every sent invoice is permanently locked, including failed submissions.</p>
+</div>
+@if (confirming)
+{
+    <div class="alert alert-warning" role="alert"><strong>Submit @selected.Count invoice(s) to @environment?</strong><p>This calls the FBR API and locks the submitted invoices.</p><button class="btn btn-primary" disabled="@busy" @onclick="() => Process(true)">Confirm submission</button> <button class="btn btn-light" disabled="@busy" @onclick="() => confirming = false">Cancel</button></div>
+}
+@if (busy) { <p role="status">Processing @completed of @selected.Count. Keep this page open.</p> }
+<div class="card table-responsive"><table class="table align-middle"><thead><tr><th><input type="checkbox" aria-label="Select all eligible invoices" disabled="@busy" @onchange="SelectAll" /></th><th>Reference</th><th>Buyer</th><th>Total</th><th>Stage</th><th>Result</th></tr></thead><tbody>
+@foreach (var row in invoices)
+{
+    <tr><td><input type="checkbox" aria-label="Select invoice @row.InvoiceRefNo" checked="@selected.Contains(row.Id)" disabled="@(busy || row.Stage == InvoiceStage.SentToFbr)" @onchange="e => Select(row.Id, e)" /></td><td><a href="/invoices/@row.Id">@row.InvoiceRefNo</a></td><td>@row.Payload.BuyerBusinessName</td><td>@row.Payload.Items.Sum(x => x.TotalValues).ToString("N2")</td><td>@row.Stage</td><td>@row.State</td></tr>
+}
+</tbody></table></div>
+@if (results.Count > 0)
+{
+    <section class="card p-4 mt-4" aria-live="polite"><h2>Processing results</h2><ol>@foreach (var result in results) { <li class="mb-2">@result</li> }</ol><a href="/invoices">View all invoices and received numbers →</a></section>
+}
+@code {
+    [SupplyParameterFromQuery] public int? InvoiceId { get; set; }
+    private IReadOnlyList<InvoiceRecord> invoices = [];
+    private HashSet<int> selected = [];
+    private List<string> results = [];
+    private FbrEnvironment environment = FbrEnvironment.Sandbox;
+    private bool busy, confirming;
+    private int completed;
+    private string? error;
+    protected override async Task OnInitializedAsync()
+    {
+        try { invoices = await Service.ListAsync(); if (InvoiceId.HasValue && invoices.Any(x => x.Id == InvoiceId && x.Stage != InvoiceStage.SentToFbr)) selected.Add(InvoiceId.Value); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+    private void Select(int id, ChangeEventArgs e) { if (e.Value is true) selected.Add(id); else selected.Remove(id); }
+    private void SelectAll(ChangeEventArgs e) { selected = e.Value is true ? invoices.Where(x => x.Stage != InvoiceStage.SentToFbr).Select(x => x.Id).ToHashSet() : []; }
+    private async Task Process(bool send)
+    {
+        if (busy) return;
+        busy = true; confirming = false; results.Clear(); completed = 0; error = null;
+        try {
+            foreach (var id in selected.ToArray())
+            {
+                var reference = invoices.First(x => x.Id == id).InvoiceRefNo;
+                try {
+                    var result = send ? await Service.SendAsync(id, environment) : await Service.ValidateAsync(id);
+                    results.Add($"{reference}: {(result.Succeeded ? "Succeeded" : "Failed")} — {result.InvoiceNumber ?? result.Error ?? result.Status}");
+                } catch (Exception ex) { results.Add($"{reference}: not completed — {ex.Message}"); }
+                completed++; await InvokeAsync(StateHasChanged);
+            }
+            invoices = await Service.ListAsync();
+            selected.RemoveWhere(id => invoices.Any(x => x.Id == id && x.Stage == InvoiceStage.SentToFbr));
+        } catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

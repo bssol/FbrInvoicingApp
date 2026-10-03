@@ -1,0 +1,26 @@
+﻿@inherits LayoutComponentBase
+
+<AuthorizeView>
+    <Authorized>
+        <div class="page top-navigation-layout">
+            <NavMenu />
+            <main>
+                <div class="top-row px-4">
+                    <div class="topbar-context"><span class="status-dot"></span> FBR workspace <span class="topbar-divider">/</span> Secure session</div>
+                    <div class="topbar-actions"><span class="topbar-date">@DateTime.Now.ToString("dddd, dd MMMM yyyy")</span><a class="help-link" href="/invoices">Help center</a></div>
+                </div>
+                <article class="content px-4">@Body</article>
+            </main>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <main class="public-main"><article class="public-content">@Body</article></main>
+    </NotAuthorized>
+</AuthorizeView>
+
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

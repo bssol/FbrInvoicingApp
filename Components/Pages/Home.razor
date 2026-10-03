@@ -1,0 +1,23 @@
+﻿@page "/"
+
+@attribute [Authorize]
+@using FbrInvoicingApp.Web.Domain
+@using FbrInvoicingApp.Web.Services
+@inject InvoiceService Service
+
+<PageTitle>Home</PageTitle>
+
+<div class="hero-card"><span class="eyebrow">FBR INVOICING</span><h1>Simple, controlled invoice submission.</h1><p>Prepare drafts, validate with FBR and submit with confidence from one focused workspace.</p><AuthorizeView><Authorized><a class="btn btn-primary" href="/invoices">Open invoices</a></Authorized><NotAuthorized><a class="btn btn-primary" href="Account/Login">Sign in</a></NotAuthorized></AuthorizeView></div>
+@if (error is not null) { <div class="alert alert-danger mt-4">@error <a href="/api/auth/logout">Sign in again</a></div> }
+<div class="stat-grid">
+    <div class="card stat-card"><span>All invoices</span><strong>@invoices.Count</strong></div>
+    <div class="card stat-card"><span>Drafts</span><strong>@invoices.Count(x => x.Stage == InvoiceStage.Draft)</strong></div>
+    <div class="card stat-card"><span>Ready to send</span><strong>@invoices.Count(x => x.Stage == InvoiceStage.Validated)</strong></div>
+    <div class="card stat-card"><span>Accepted by FBR</span><strong>@invoices.Count(x => x.State == InvoiceState.Success)</strong></div>
+</div>
+<div class="card p-4"><h2>Your next step</h2><p class="text-muted">Create or import a draft, check it with FBR, and track every submission.</p><div class="action-bar"><a class="btn btn-light" href="/invoices/new">Create invoice</a><a class="btn btn-light" href="/invoices/import">Import CSV</a><a class="btn btn-primary" href="/invoices/send">Open submission workspace →</a></div></div>
+@code {
+    private IReadOnlyList<InvoiceRecord> invoices = [];
+    private string? error;
+    protected override async Task OnInitializedAsync() { try { invoices = await Service.ListAsync(); } catch (Exception ex) { error = ex.Message; } }
+}

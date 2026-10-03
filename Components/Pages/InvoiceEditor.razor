@@ -1,0 +1,240 @@
+@page "/invoices/new"
+@page "/invoices/{Id:int}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using FbrInvoicingApp.Web.Domain
+@using FbrInvoicingApp.Web.Services
+@inject InvoiceService InvoiceService
+@inject NavigationManager Navigation
+
+<PageTitle>New invoice</PageTitle>
+
+<div class="invoice-page-heading page-heading">
+    <div>
+        <span class="eyebrow">FBR INVOICE</span>
+        <h1>@(Id.HasValue ? $"Invoice {invoice.InvoiceRefNo}" : "Create invoice")</h1>
+        <p class="text-muted mb-0">Complete the invoice header and add one or more line items before saving your draft.</p>
+    </div>
+    <a href="/invoices" class="btn btn-light">Back to invoices</a>
+</div>
+
+<EditForm Model="invoice.Payload" OnValidSubmit="SaveAsync" class="invoice-editor">
+    @if (Id.HasValue)
+    {
+        <div class="card p-3 action-bar"><span>@invoice.Stage · @invoice.State</span><strong>FBR number: @(invoice.ReceivedInvoiceNumber ?? "Not issued")</strong>
+        @if (!Locked) { <a class="btn btn-primary" href="/invoices/send?InvoiceId=@Id">Validate / Send to FBR</a> }
+        </div>
+        @if (invoice.FbrResponseMessage is not null) { <div class="alert alert-info">@invoice.FbrResponseMessage</div> }
+    }
+    <fieldset disabled="@Locked">
+    <DataAnnotationsValidator />
+    <div class="validation-summary"><ValidationSummary /></div>
+
+    @if (!string.IsNullOrWhiteSpace(saveError))
+    {
+        <div class="invoice-save-error" role="alert">
+            <div><strong>Invoice could not be saved.</strong><span>@saveError</span></div>
+            <a class="btn btn-light btn-sm" href="/company">Open company setup</a>
+        </div>
+    }
+
+    <section class="invoice-section card">
+        <div class="invoice-section-heading">
+            <div><span class="section-kicker">01</span><div><h2>Invoice header</h2><p>Basic identification and FBR scenario details.</p></div></div>
+        </div>
+        <div class="invoice-form-grid invoice-form-grid-four">
+            <div class="field-group"><label>Invoice reference <span class="required">*</span></label><InputText class="form-control" placeholder="e.g. INV-0001" @bind-Value="invoice.Payload.InvoiceRefNo" /></div>
+            <div class="field-group"><label>Invoice date <span class="required">*</span></label><InputText type="date" class="form-control" @bind-Value="invoice.Payload.InvoiceDate" /></div>
+            <div class="field-group"><label>Invoice type</label><InputText class="form-control" @bind-Value="invoice.Payload.InvoiceType" /></div>
+            <div class="field-group"><label>Scenario ID</label><InputText class="form-control" placeholder="Optional FBR scenario" @bind-Value="invoice.Payload.ScenarioId" /></div>
+        </div>
+    </section>
+
+    <div class="invoice-parties-grid">
+        <section class="invoice-section card">
+            <div class="invoice-section-heading"><div><span class="section-kicker">02</span><div><h2>Seller details</h2><p>Information sent as the seller.</p></div></div></div>
+            <div class="invoice-form-grid">
+                <div class="field-group"><label>NTN / CNIC <span class="required">*</span></label><InputText class="form-control" @bind-Value="invoice.Payload.SellerNTNCNIC" /></div>
+                <div class="field-group"><label>Business name <span class="required">*</span></label><InputText class="form-control" @bind-Value="invoice.Payload.SellerBusinessName" /></div>
+                <div class="field-group"><label>Province</label><InputText class="form-control" @bind-Value="invoice.Payload.SellerProvince" /></div>
+                <div class="field-group field-span-full"><label>Address</label><InputText class="form-control" @bind-Value="invoice.Payload.SellerAddress" /></div>
+            </div>
+        </section>
+
+        <section class="invoice-section card">
+            <div class="invoice-section-heading"><div><span class="section-kicker">03</span><div><h2>Buyer details</h2><p>Information sent as the buyer.</p></div></div></div>
+            <div class="invoice-form-grid">
+                <div class="field-group"><label>NTN / CNIC <span class="required">*</span></label><InputText class="form-control" @bind-Value="invoice.Payload.BuyerNTNCNIC" /></div>
+                <div class="field-group"><label>Business name <span class="required">*</span></label><InputText class="form-control" @bind-Value="invoice.Payload.BuyerBusinessName" /></div>
+                <div class="field-group"><label>Province</label><InputText class="form-control" @bind-Value="invoice.Payload.BuyerProvince" /></div>
+                <div class="field-group"><label>Registration type</label><InputText class="form-control" placeholder="Registered / Unregistered" @bind-Value="invoice.Payload.BuyerRegistrationType" /></div>
+                <div class="field-group field-span-full"><label>Address</label><InputText class="form-control" @bind-Value="invoice.Payload.BuyerAddress" /></div>
+            </div>
+        </section>
+    </div>
+
+    <section class="invoice-section card line-items-section">
+        <div class="invoice-section-heading line-items-heading">
+            <div><span class="section-kicker">04</span><div><h2>Line items</h2><p>Add one or more products or services to this invoice.</p></div></div>
+            <button type="button" class="btn btn-primary btn-add-line" @onclick="AddLine">+ Add line</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(lineError))
+        {
+            <div class="invoice-inline-error">@lineError</div>
+        }
+
+        <div class="line-items-scroll">
+            <table class="line-items-table">
+                <thead>
+                    <tr><th class="line-number">#</th><th>HS code</th><th class="line-description">Description</th><th>Rate</th><th>UoM</th><th>Qty</th><th>Sales value</th><th>Sales tax</th><th>Total</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in invoice.Payload.Items.Select((value, index) => (value, index)))
+                    {
+                        <tr @key="item.value">
+                            <td class="line-number">@(item.index + 1)</td>
+                            <td><InputText class="line-input" placeholder="HS code" @bind-Value="item.value.HsCode" /></td>
+                            <td class="line-description"><InputText class="line-input" placeholder="Product or service description" @bind-Value="item.value.ProductDescription" /></td>
+                            <td><InputText class="line-input" placeholder="17%" @bind-Value="item.value.Rate" /></td>
+                            <td><InputText class="line-input" placeholder="PCS" @bind-Value="item.value.UoM" /></td>
+                            <td><InputNumber class="line-input numeric-input" min="0" @bind-Value="item.value.Quantity" /></td>
+                            <td><InputNumber class="line-input numeric-input" min="0" @bind-Value="item.value.ValueSalesExcludingST" /></td>
+                            <td><InputNumber class="line-input numeric-input" min="0" @bind-Value="item.value.SalesTaxApplicable" /></td>
+                            <td><InputNumber class="line-input numeric-input" min="0" @bind-Value="item.value.TotalValues" /></td>
+                            <td><button type="button" class="line-remove" title="Remove line" aria-label="Remove line @(item.index + 1)" disabled="@(invoice.Payload.Items.Count == 1)" @onclick="() => RemoveLine(item.value)">×</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="line-items-footer">
+            <div class="line-items-help"><span class="help-icon">i</span><span>Use the full line item fields for FBR validation. More fields are available below.</span></div>
+            <div class="invoice-total"><span>Invoice total</span><strong>@InvoiceTotal.ToString("N2")</strong></div>
+        </div>
+
+        <details class="advanced-lines">
+            <summary>Show additional FBR line fields</summary>
+            <div class="advanced-lines-grid">
+                @foreach (var item in invoice.Payload.Items.Select((value, index) => (value, index)))
+                {
+                    <div class="advanced-line-card" @key="item.value">
+                        <div class="advanced-line-title">Line @(item.index + 1) · @(!string.IsNullOrWhiteSpace(item.value.ProductDescription) ? item.value.ProductDescription : "Untitled item")</div>
+                        <div class="invoice-form-grid invoice-form-grid-four">
+                            <div class="field-group"><label>Fixed notified value / retail price</label><InputNumber class="form-control" min="0" @bind-Value="item.value.FixedNotifiedValueOrRetailPrice" /></div>
+                            <div class="field-group"><label>Sales tax withheld</label><InputNumber class="form-control" min="0" @bind-Value="item.value.SalesTaxWithheldAtSource" /></div>
+                            <div class="field-group"><label>Extra tax</label><InputNumber class="form-control" min="0" @bind-Value="item.value.ExtraTax" /></div>
+                            <div class="field-group"><label>Further tax</label><InputNumber class="form-control" min="0" @bind-Value="item.value.FurtherTax" /></div>
+                            <div class="field-group"><label>FED payable</label><InputNumber class="form-control" min="0" @bind-Value="item.value.FedPayable" /></div>
+                            <div class="field-group"><label>Discount</label><InputNumber class="form-control" min="0" @bind-Value="item.value.Discount" /></div>
+                            <div class="field-group"><label>SRO schedule no.</label><InputText class="form-control" @bind-Value="item.value.SroScheduleNo" /></div>
+                            <div class="field-group"><label>SRO item serial no.</label><InputText class="form-control" @bind-Value="item.value.SroItemSerialNo" /></div>
+                            <div class="field-group field-span-full"><label>Sale type</label><InputText class="form-control" @bind-Value="item.value.SaleType" /></div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </details>
+    </section>
+
+    <div class="invoice-form-actions">
+        <a href="/invoices" class="btn btn-light">Cancel</a>
+        <button class="btn btn-primary" type="submit" disabled="@saving">@(saving ? "Saving…" : "Save draft")</button>
+    </div>
+    </fieldset>
+</EditForm>
+@if (Id.HasValue && !Locked)
+{
+    <div class="mt-4">
+        @if (!confirmDelete) { <button class="btn btn-light" @onclick="() => confirmDelete = true">Delete draft</button> }
+        else { <span>Delete this unsent invoice?</span> <button class="btn btn-danger" @onclick="DeleteAsync">Confirm delete</button> <button class="btn btn-light" @onclick="() => confirmDelete = false">Cancel</button> }
+    </div>
+}
+@if (invoice.Attempts.Count > 0)
+{
+    <section class="card p-4 mt-4"><h2>Submission history</h2>
+    @foreach (var attempt in invoice.Attempts.OrderByDescending(x => x.CreatedAtUtc))
+    { <details class="mb-3"><summary>@attempt.CreatedAtUtc.ToString("g") UTC · @attempt.Operation · @attempt.Environment · @(attempt.Succeeded ? "Success" : "Failed")</summary><pre class="mt-2">@attempt.ResponseJson</pre></details> }
+    </section>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private bool Locked => loadFailed || invoice.Stage == InvoiceStage.SentToFbr;
+    private bool confirmDelete, loadFailed;
+    private async Task DeleteAsync() { try { await InvoiceService.DeleteAsync(invoice.Id); Navigation.NavigateTo("/invoices"); } catch (Exception ex) { saveError = ex.Message; } }
+    private InvoiceRecord invoice = new();
+    private string? lineError;
+    private string? saveError;
+    private bool saving;
+
+    private decimal InvoiceTotal => invoice.Payload.Items.Sum(item => item.TotalValues);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            if (Id.HasValue) invoice = await InvoiceService.GetAsync(Id.Value);
+            else
+            {
+                invoice = new();
+                var company = await InvoiceService.GetCurrentCompanyAsync();
+                if (company is not null)
+                {
+                    invoice.Payload.SellerNTNCNIC = company.NtnCnic;
+                    invoice.Payload.SellerBusinessName = company.Name;
+                    invoice.Payload.SellerProvince = company.Province;
+                    invoice.Payload.SellerAddress = company.Address;
+                }
+            }
+        }
+        catch (Exception ex) { saveError = ex.Message; loadFailed = true; }
+        if (invoice.Payload.Items.Count == 0)
+            invoice.Payload.Items.Add(new Item());
+    }
+
+    private void AddLine()
+    {
+        lineError = null;
+        invoice.Payload.Items.Add(new Item());
+    }
+
+    private void RemoveLine(Item item)
+    {
+        if (invoice.Payload.Items.Count <= 1)
+        {
+            lineError = "An invoice must contain at least one line item.";
+            return;
+        }
+
+        lineError = null;
+        invoice.Payload.Items.Remove(item);
+    }
+
+    private async Task SaveAsync()
+    {
+        lineError = invoice.Payload.Items.Count == 0 ? "Add at least one line item before saving." : null;
+        if (lineError is not null) return;
+
+        saveError = null;
+        saving = true;
+        try
+        {
+            await InvoiceService.SaveDraftAsync(invoice);
+            Navigation.NavigateTo("/invoices");
+        }
+        catch (InvalidOperationException ex)
+        {
+            saveError = ex.Message;
+        }
+        catch (Exception)
+        {
+            saveError = "Please check your company setup and try again.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}
